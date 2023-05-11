@@ -11,6 +11,7 @@ import com.roshka.sifen.core.fields.response.TxProtDe;
 import com.roshka.sifen.core.fields.response.batch.TgResProcLote;
 import com.roshka.sifen.core.fields.response.event.TgResProcEVe;
 import com.roshka.sifen.core.fields.response.ruc.TxContRuc;
+import com.roshka.sifen.internal.ctx.GenerationCtx;
 
 import java.util.Collections;
 
@@ -19,28 +20,33 @@ public class SifenExampleApp {
 
         // Se carga la Configuración del SIFEN
         SifenConfig config = SifenConfig.cargarConfiguracion("C:\\.AoC\\sifen.properties");
+        config.setHabilitarNotaTecnica13(true);
         Sifen.setSifenConfig(config);
+        GenerationCtx generationCtx = GenerationCtx.getDefaultFromConfig(config);
 
         // Consulta de RUC
         System.out.println(pruebaConsultaRUC("80089752"));
 
         // Creación de una Factura
-        DocumentoElectronico DE = SifenExampleHelper.cargarDE("0000016");
+        DocumentoElectronico DE = SifenExampleHelper.cargarDE("0000021", true, generationCtx);
         System.out.println("CDC del Documento Electrónico -> " + DE.obtenerCDC());
 
         // Se verifica que la Factura sea valida
-        ValidezFirmaDigital validez = Sifen.validarFirmaDEDesdeXml(DE.generarXml());
+        ValidezFirmaDigital validez = Sifen.validarFirmaDEDesdeXml(DE.generarXml(generationCtx));
         if (validez.isValido()) {
             System.out.println("El documento es valido");
 
             // Emisión de una Factura
-            // System.out.println(pruebaRecepcionDE(DE));
+            //    System.out.println(pruebaRecepcionDE(DE));
 
             // Emisión Lote de DE
-            System.out.println(pruebaRecepcionYConsultaLoteDE(DE));
+            // System.out.println(pruebaRecepcionYConsultaLoteDE(DE));
 
             // Anulación de la Factura recien Emitida
-            System.out.println(pruebaAnularFactura(DE));
+            //  System.out.println(pruebaAnularFactura(DE));
+
+            // Nominación de la Factura recien Emitida
+             System.out.println(pruebaNominarFactura(DE));
         } else System.out.println(validez.getMotivoInvalidez());
 
     }
@@ -200,5 +206,40 @@ public class SifenExampleApp {
         return resultado.concat("Fin Anulación de Factura");
     }
 
+    /**
+     * Método que envía un Evento de Nominacion al Sifen, y devuelve como resultado una cadena con el resultado
+     * de la Recepción del Envío.
+     * <p>
+     * Este método hace uso del método Sifen.recepcionEvento(eventosDE) de la librería RSHK-JSIFENLIB
+     *
+     * @param de El Documento Electrónico a nominar
+     * @return Una cadena formateada con el resultado de la Recepción del Envío
+     * @throws SifenException Si la configuración de Sifen no fue establecida o, si algún dato necesario para la
+     *                        *                        consulta no pudo ser encontrado o, si la consulta no pudo ser realizada.
+     */
+    public static String pruebaNominarFactura(DocumentoElectronico de) throws SifenException {
+
+        EventosDE eventosDE = SifenExampleHelper.crearEventoNominacion(de.obtenerCDC());
+        RespuestaRecepcionEvento respuesta = Sifen.recepcionEvento(eventosDE);
+
+        String resultado = String.format("Nominacion de Factura:\n" +
+                        "\tCodigo de Estado: %s\n" +
+                        "\tRespuesta Recepción Evento:\n",
+                respuesta.getCodigoEstado());
+
+        //Por cada Respuesta de Procesamiento de Evento:
+        for (TgResProcEVe gResProcEVe : respuesta.getgResProcEVe()) {
+
+            String sub = String.format("\t\tID %s: %s\n", gResProcEVe.getId(), gResProcEVe.getdEstRes());
+
+            //Por cada Respuesta de Procesamiento:
+            for (TgResProc gResProc : gResProcEVe.getgResProc()) {
+                sub = sub.concat(String.format("\t\t* Cod %s: %s\n", gResProc.getdCodRes(), gResProc.getdMsgRes()));
+            }
+
+            resultado = resultado.concat(sub);
+        }
+        return resultado.concat("Fin Nominacion de Factura");
+    }
 
 }

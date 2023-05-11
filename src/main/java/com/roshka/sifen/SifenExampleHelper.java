@@ -5,9 +5,11 @@ import com.roshka.sifen.core.beans.EventosDE;
 import com.roshka.sifen.core.exceptions.SifenException;
 import com.roshka.sifen.core.fields.request.de.*;
 import com.roshka.sifen.core.fields.request.event.TgGroupTiEvt;
+import com.roshka.sifen.core.fields.request.event.TrGEveNom;
 import com.roshka.sifen.core.fields.request.event.TrGeVeCan;
 import com.roshka.sifen.core.fields.request.event.TrGesEve;
 import com.roshka.sifen.core.types.*;
+import com.roshka.sifen.internal.ctx.GenerationCtx;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -29,7 +31,7 @@ public class SifenExampleHelper {
      * @param dNumDoc Una cadena con el Número de Documento para la factura
      * @return Un Documento Electrónico generado
      */
-    private static DocumentoElectronico crearDE(String dNumDoc) {
+    private static DocumentoElectronico crearDE(String dNumDoc, boolean innominado) {
         LocalDateTime currentDate = LocalDateTime.now();
 
         // Grupo A: Creación del Documento Electrónico
@@ -93,9 +95,16 @@ public class SifenExampleHelper {
         gDatRec.setiNatRec(TiNatRec.NO_CONTRIBUYENTE);
         gDatRec.setiTiOpe(TiTiOpe.B2C);
         gDatRec.setcPaisRec(PaisType.PRY);
-        gDatRec.setiTipIDRec(TiTipDocRec.CEDULA_PARAGUAYA);
-        gDatRec.setdNumIDRec("4184256");
-        gDatRec.setdNomRec("Gabriel Gomez");
+
+        if(innominado)
+            gDatRec.setiTipIDRec(TiTipDocRec.INNOMINADO);
+        else {
+            gDatRec.setiTipIDRec(TiTipDocRec.CEDULA_PARAGUAYA);
+            gDatRec.setdNumIDRec("4184256");
+            gDatRec.setdNomRec("Gabriel Gomez");
+
+        }
+
         dDatGralOpe.setgDatRec(gDatRec);
         DE.setgDatGralOpe(dDatGralOpe);
 
@@ -141,6 +150,7 @@ public class SifenExampleHelper {
         gCamIVA.setiAfecIVA(TiAfecIVA.GRAVADO);
         gCamIVA.setdPropIVA(BigDecimal.valueOf(100));
         gCamIVA.setdTasaIVA(BigDecimal.valueOf(10));
+
         gCamItem.setgCamIVA(gCamIVA);
 
         gCamItemList.add(gCamItem);
@@ -164,11 +174,11 @@ public class SifenExampleHelper {
      * @throws SifenException Una cadena formateada con el resultado de la Recepción y Consulta de Lote de DE realizadas (en el caso
      *                        de la última, sólo si se pudo realizar la consulta)
      */
-    private static DocumentoElectronico generarDE(Path rutaArchivo, String dNumDoc) throws SifenException {
+    private static DocumentoElectronico generarDE(Path rutaArchivo, String dNumDoc, boolean innominado, GenerationCtx generationCtx) throws SifenException {
 
-        DocumentoElectronico DE = crearDE(dNumDoc);
+        DocumentoElectronico DE = crearDE(dNumDoc, innominado);
         try {
-            Files.write(rutaArchivo, DE.generarXml().getBytes());
+            Files.write(rutaArchivo, DE.generarXml(generationCtx).getBytes());
             System.out.println("Archivo creado");
         } catch (IOException ioException) {
             ioException.printStackTrace();
@@ -190,7 +200,7 @@ public class SifenExampleHelper {
      * @throws SifenException Una cadena formateada con el resultado de la Recepción y Consulta de Lote de DE realizadas (en el caso
      *                        de la última, sólo si se pudo realizar la consulta)
      */
-    public static DocumentoElectronico cargarDE(String dNumDoc) throws SifenException {
+    public static DocumentoElectronico cargarDE(String dNumDoc, boolean innominado, GenerationCtx generationCtx) throws SifenException {
         Path rutaArchivo = Paths.get(String.format("../DE%s.xml", dNumDoc));
         DocumentoElectronico DE = null;
         if (Files.exists(rutaArchivo)) {
@@ -203,7 +213,7 @@ public class SifenExampleHelper {
             }
         } else {
             System.out.println("Creando factura\n");
-            DE = generarDE(rutaArchivo, dNumDoc);
+            DE = generarDE(rutaArchivo, dNumDoc, innominado, generationCtx);
         }
         return DE;
     }
@@ -223,6 +233,38 @@ public class SifenExampleHelper {
 
         TgGroupTiEvt gGroupTiEvt = new TgGroupTiEvt();
         gGroupTiEvt.setrGeVeCan(rGeVeCan);
+
+        TrGesEve rGesEve = new TrGesEve();
+        rGesEve.setId("1");
+        rGesEve.setdFecFirma(currentDate);
+        rGesEve.setgGroupTiEvt(gGroupTiEvt);
+
+        EventosDE eventosDE = new EventosDE();
+        eventosDE.setrGesEveList(Collections.singletonList(rGesEve));
+
+        return eventosDE;
+    }
+
+    /**
+     * Método que crea un Evento de Nominacion con el CDC de un DTE.
+     *
+     * @param cdc El CDC de un DTE a Nominar.
+     * @return Un Evento de Nominacion con el CDC de un DTE.
+     */
+    public static EventosDE crearEventoNominacion(String cdc) {
+        LocalDateTime currentDate = LocalDateTime.now();
+
+        TrGEveNom rGEveNom = new TrGEveNom();
+        rGEveNom.setId(cdc);
+        rGEveNom.setmOtEve("Prueba de nominación de documento electrónico");
+        rGEveNom.setiNatRec(TiNatRec.NO_CONTRIBUYENTE);
+        rGEveNom.setcPaisRec(PaisType.PRY);
+        rGEveNom.setiTipIDRec(TiTipDocRec.CEDULA_PARAGUAYA);
+        rGEveNom.setdNumIDRec("4184256");
+        rGEveNom.setdNomRec("Gabriel Gomez");
+
+        TgGroupTiEvt gGroupTiEvt = new TgGroupTiEvt();
+        gGroupTiEvt.setrGEveNom(rGEveNom);
 
         TrGesEve rGesEve = new TrGesEve();
         rGesEve.setId("1");
